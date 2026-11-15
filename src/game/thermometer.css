@@ -1,0 +1,104 @@
+/* ════════════════════════════════════════════════════════════════
+   温度计（Thermometers）—— 游戏专用皮肤
+   ════════════════════════════════════════════════════════════════ */
+
+:root {
+  --tm-water: #2f6f8f;
+  --tm-water-dark: #255a74;
+  --tm-ink: #24231f;
+  --tm-paper: #fbf7ee;
+  --tm-board: #ece4d3;
+  --tm-board-line: #d4cbb9;
+}
+
+.board-svg .tm-board-bg {
+  fill: var(--tm-board);
+  stroke: var(--tm-board-line);
+  stroke-width: 1.5;
+}
+
+.board-svg .tm-cell {
+  stroke: rgba(36, 35, 31, 0.12);
+  stroke-width: 1;
+  pointer-events: none;
+}
+
+.board-svg .tm-cell.empty {
+  fill: var(--tm-paper);
+}
+
+.board-svg .tm-cell.filled {
+  fill: var(--tm-water);
+  stroke: var(--tm-water-dark);
+}
+
+.board-svg .tm-cell.mark {
+  fill: #f4efe2;
+}
+
+.board-svg .tm-tube {
+  fill: none;
+  stroke: rgba(36, 35, 31, 0.22);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.board-svg .tm-bulb {
+  fill: #fffdf8;
+  stroke: rgba(36, 35, 31, 0.45);
+  stroke-width: 2;
+  pointer-events: none;
+}
+
+.board-svg .tm-bulb.filled {
+  fill: var(--tm-water);
+  stroke: var(--tm-water-dark);
+}
+
+.board-svg .tm-x {
+  fill: rgba(36, 35, 31, 0.32);
+  font-family: var(--font);
+  font-weight: 700;
+  text-anchor: middle;
+  dominant-baseline: central;
+  pointer-events: none;
+}
+
+.board-svg .tm-sum {
+  fill: var(--tm-ink);
+  font-family: var(--mono);
+  font-weight: 700;
+  text-anchor: end;
+  dominant-baseline: central;
+  pointer-events: none;
+}
+
+.board-svg .tm-sums .tm-sum:nth-child(n + 1) {
+  text-anchor: end;
+}
+
+.board-svg .tm-sum.issue {
+  fill: var(--error);
+}
+
+.board-svg .tm-error {
+  fill: rgba(194, 59, 46, 0.12);
+  stroke: var(--error);
+  stroke-width: 2.2;
+  pointer-events: none;
+}
+
+.board-svg .cell-hit {
+  pointer-events: all;
+}
+
+.board-svg .cell-hit:hover {
+  fill: rgba(31, 111, 92, 0.16);
+}
+
+.custom-cell.v-filled {
+  background: var(--tm-water);
+  border-color: var(--tm-water-dark);
+  color: #fffdf8;
+}
