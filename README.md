@@ -84,3 +84,29 @@ npm run check     # 审计题库
 npm run verify    # 参考解、逻辑回放与交互验证
 npm run audit     # 逐题审计逻辑解题
 ```
+
+## 图片导入
+
+`npm run import-image -- <图片路径>` 可以自动识别整张温度计题图（网格、每支温度计的球端/管身、盘外行/列数字），生成题库格式并可写入导入题库。
+
+```bash
+# 只识别与预览（不写入）
+npm run import-image -- 题图.png --dry
+
+# 识别并追加到题库（写入 src/game/imported-puzzles.ts，npm run gen 不会覆盖）
+npm run import-image -- 题图.png --name "我的温度计" --append
+
+# 识别 + 用项目求解器校验唯一解（30×30 大题通常超时，只警告）
+npm run import-image -- 题图.png --append --verify
+```
+
+| 参数 | 说明 |
+|------|------|
+| `--size N` / `--width W --height H` | 覆盖棋盘尺寸；默认自动识别格子数 |
+| `--rows "a,b,…"` / `--cols "a,b,…"` | OCR 不确定时手动覆盖行/列和 |
+| `--name 名称` / `--id ID` | 题库里的名字 / id |
+| `--append` | 写入 `src/game/imported-puzzles.ts` |
+| `--verify` | 额外做唯一解检查（大题会超时警告） |
+| `--dry` | 只识别、不写入 |
+
+限制：题图里的「球端圆环」必须和管身有可见描边；若描边被抗锯齿切断成碎片，脚本会用碎片并集补出该温度计（30×30 图已验证 206 支温度计铺满 900 格、行/列和一致）。
