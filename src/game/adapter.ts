@@ -52,7 +52,8 @@ const meta = {
 
 const VALUE_CYCLE: Array<number | null> = [null, FILLED]
 
-function thermometersFromPicture(picture: number[], w: number, h: number): number[][] {
+/** 旧行为：把每行连续填充段切成横向温度计（用于形状不规整时的兼容回退） */
+function horizontalRuns(picture: number[], w: number, h: number): number[][] {
   const out: number[][] = []
   for (let y = 0; y < h; y++) {
     let x = 0
@@ -72,6 +73,53 @@ function thermometersFromPicture(picture: number[], w: number, h: number): numbe
   return out
 }
 
+/**
+ * 把「画出的注水格」切成温度计：
+ *   - 按上下左右连通块分组；每个连通块必须是同一行或同一列的直线，
+ *     于是横线 → 横向温度计（球端在左），竖线 → 纵向温度计（球端在上）；
+ *   - 出现 L 形 / 十字 / 方块等不规整形状时退回旧行为（逐行切横段），
+ *     保证旧自定义题的画法仍能保存。
+ */
+function thermometersFromPicture(picture: number[], w: number, h: number): number[][] {
+  const seen = new Uint8Array(w * h)
+  const out: number[][] = []
+  for (let start = 0; start < picture.length; start++) {
+    if (picture[start] !== FILLED || seen[start]) continue
+    // 4 邻连通块
+    const comp: number[] = []
+    const queue = [start]
+    seen[start] = 1
+    while (queue.length) {
+      const i = queue.pop()!
+      comp.push(i)
+      const x = i % w
+      const y = (i / w) | 0
+      if (x > 0 && picture[i - 1] === FILLED && !seen[i - 1]) {
+        seen[i - 1] = 1
+        queue.push(i - 1)
+      }
+      if (x + 1 < w && picture[i + 1] === FILLED && !seen[i + 1]) {
+        seen[i + 1] = 1
+        queue.push(i + 1)
+      }
+      if (y > 0 && picture[i - w] === FILLED && !seen[i - w]) {
+        seen[i - w] = 1
+        queue.push(i - w)
+      }
+      if (y + 1 < h && picture[i + w] === FILLED && !seen[i + w]) {
+        seen[i + w] = 1
+        queue.push(i + w)
+      }
+    }
+    const sameRow = comp.every((i) => ((i / w) | 0) === ((comp[0]! / w) | 0))
+    const sameCol = comp.every((i) => i % w === comp[0]! % w)
+    if (!sameRow && !sameCol) return horizontalRuns(picture, w, h)
+    comp.sort((a, b) => a - b) // 行内从左到右 / 列内从上到下
+    out.push(comp)
+  }
+  return out
+}
+
 const custom: CustomSupport = {
   mode: 'picture',
   valueCycle: VALUE_CYCLE,
@@ -86,7 +134,7 @@ const custom: CustomSupport = {
 
   cellClass: (v) => (v === FILLED ? 'v-filled' : ''),
 
-  hint: '在自定义题板里画出注水答案（点格子），载入后每段连续格会变成一支横向温度计。',
+  hint: '在自定义题板里画出注水答案（点格子）：横向连续格 → 横向温度计（球端在左），竖直连续格 → 纵向温度计（球端在上）。L 形等不规整画法会按逐行横段解释。',
 
   toGrid: (p) => {
     const solution = (p as ThermoPuzzle).solution
