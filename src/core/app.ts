@@ -343,134 +343,158 @@ export function createApp(root: HTMLElement, adapter: GameAdapter) {
     if (!svg) return
 
     view.apply(svg)
+    // 盘面重绘会替换 <svg>，因此事件只绑一次，命中时再取当前 svg
+    if (board.dataset.bound === '1') return
+    board.dataset.bound = '1'
 
-    svg.addEventListener('contextmenu', (e) => {
-      e.preventDefault()
-    })
-
+    /** 按下第一格确定画笔：from → to，拖动时只改仍是 from 的格子 */
+    let brush: { from: number; to: number } | null = null
+    let panning = false
     let dragging = false
     let dragMoved = false
+    let pointerId: number | null = null
     let lastClient = { x: 0, y: 0 }
-    let pending: { index: number } | null = null
-    let painting: { kind: 'cycle' | 'force'; to: number } | null = null
     let painted = new Set<number>()
 
-    const hitAt = (e: PointerEvent) => {
+    const currentSvg = () => board.querySelector<SVGSVGElement>('svg.board-svg')
+
+    const hitAtClient = (clientX: number, clientY: number) => {
       if (!session) return null
-      const vb = clientToViewBox(svg, e.clientX, e.clientY)
+      const el = currentSvg()
+      if (!el) return null
+      const vb = clientToViewBox(el, clientX, clientY)
       if (!vb) return null
       const m = adapter.metricsFor(session.puzzle)
       return adapter.hitTest(m, session.puzzle, vb.x, vb.y)
     }
 
-    svg.addEventListener(
+    const paintCell = (index: number): void => {
+      if (!session || !brush) return
+      painted.add(index)
+      if (adapter.valueAt(session.state, index) !== brush.from) return
+      pushMove({ index, from: brush.from, to: brush.to })
+      refresh()
+    }
+
+    board.addEventListener('contextmenu', (e) => {
+      e.preventDefault()
+    })
+
+    board.addEventListener(
       'wheel',
       (e) => {
+        const el = currentSvg()
+        if (!el) return
         e.preventDefault()
         e.stopPropagation()
-        const vb = clientToViewBox(svg, e.clientX, e.clientY)
+        const vb = clientToViewBox(el, e.clientX, e.clientY)
         const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12
         view.setZoom(view.zoom * factor, vb ?? undefined)
       },
       { passive: false },
     )
 
-    svg.addEventListener('pointerdown', (e) => {
+    board.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0 && e.button !== 1 && e.button !== 2) return
+      if (!session) return
       resumeAudio()
-      if (e.button === 1) {
-        // 中键拖动平移（滚轮缩放后也可用）
-        e.preventDefault()
-        dragging = true
-        dragMoved = true
-        painting = null
-        pending = null
-        lastClient = { x: e.clientX, y: e.clientY }
-        svg.setPointerCapture(e.pointerId)
-        return
-      }
-      if (e.button === 2) {
-        const hit = hitAt(e)
-        if (hit) {
-          if (!session) return
-          const to = adapter.rightClickValue(session.state, hit)
-          const from = adapter.valueAt(session.state, hit.index)
-          if (from !== to) {
-            pushMove({ index: hit.index, from, to })
-            refresh()
-          }
-        }
-        return
-      }
-      if (e.button !== 0) return
 
-      lastClient = { x: e.clientX, y: e.clientY }
+      pointerId = e.pointerId
       dragging = true
       dragMoved = false
       painted = new Set()
-      const hit = hitAt(e)
-      if (hit) {
-        if (!session) return
-        const from = adapter.valueAt(session.state, hit.index)
-        const to = adapter.cycleValue(session.state, hit)
-        painting = from === to ? null : { kind: 'cycle', to }
-        pending = hit
-      } else {
-        painting = null
-        pending = null
-      }
-      svg.setPointerCapture(e.pointerId)
-    })
+      lastClient = { x: e.clientX, y: e.clientY }
+      brush = null
+      panning = false
 
-    svg.addEventListener('pointermove', (e) => {
-      if (!dragging) return
-      const dx = e.clientX - lastClient.x
-      const dy = e.clientY - lastClient.y
-      if (!dragMoved && Math.hypot(dx, dy) < 6) return
-      dragMoved = true
-      if (painting) {
-        // 拖拽涂写：沿途命中即落子
-        const hit = hitAt(e)
-        if (hit && !painted.has(hit.index)) {
-          if (!session) return
-          painted.add(hit.index)
-          const from = adapter.valueAt(session.state, hit.index)
-          const to =
-            painting.kind === 'force' ? painting.to : adapter.cycleValue(session.state, hit)
-          if (from !== to) {
-            pushMove({ index: hit.index, from, to })
-            refresh()
-          }
+      if (e.button === 1) {
+        e.preventDefault()
+        panning = true
+        try {
+          board.setPointerCapture(e.pointerId)
+        } catch {
+          /* ignore */
         }
         return
       }
-      // 平移
-      const rect = svg.getBoundingClientRect()
-      view.panBy(dx, dy, svg, rect.width, rect.height)
-      lastClient = { x: e.clientX, y: e.clientY }
-    })
 
-    const endDrag = (e: PointerEvent) => {
-      if (!dragging) return
-      dragging = false
+      const hit = hitAtClient(e.clientX, e.clientY)
+      if (!hit || e.shiftKey) {
+        panning = true
+        try {
+          board.setPointerCapture(e.pointerId)
+        } catch {
+          /* ignore */
+        }
+        return
+      }
+
+      const from = adapter.valueAt(session.state, hit.index)
+      const to =
+        e.button === 2
+          ? adapter.rightClickValue(session.state, hit)
+          : adapter.cycleValue(session.state, hit)
+      if (from === to) return
+
       try {
-        svg.releasePointerCapture(e.pointerId)
+        board.setPointerCapture(e.pointerId)
       } catch {
         /* ignore */
       }
-      if (!dragMoved && pending && painting) {
-        if (!session) return
-        const from = adapter.valueAt(session.state, pending.index)
-        const to = painting.to
-        if (from !== to) {
-          pushMove({ index: pending.index, from, to })
-          refresh()
+      brush = { from, to }
+      paintCell(hit.index)
+    })
+
+    board.addEventListener('pointermove', (e) => {
+      if (!dragging || e.pointerId !== pointerId) return
+      const dx = e.clientX - lastClient.x
+      const dy = e.clientY - lastClient.y
+
+      if (brush) {
+        // 沿指针轨迹逐格取样，快速拖动也不会跳格
+        const el = currentSvg()
+        if (!el) return
+        const m = adapter.metricsFor(session!.puzzle)
+        const a = clientToViewBox(el, lastClient.x, lastClient.y)
+        const b = clientToViewBox(el, e.clientX, e.clientY)
+        if (a && b) {
+          const steps = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / (m.cell * 0.5)))
+          for (let i = 1; i <= steps; i++) {
+            const x = a.x + ((b.x - a.x) * i) / steps
+            const y = a.y + ((b.y - a.y) * i) / steps
+            const hit = adapter.hitTest(m, session!.puzzle, x, y)
+            if (hit && !painted.has(hit.index)) paintCell(hit.index)
+          }
         }
+        lastClient = { x: e.clientX, y: e.clientY }
+        return
       }
-      pending = null
-      painting = null
+
+      if (!panning) return
+      if (!dragMoved && Math.hypot(dx, dy) < 4) return
+      dragMoved = true
+      const el = currentSvg()
+      if (!el) return
+      const rect = el.getBoundingClientRect()
+      view.panBy(dx, dy, el, rect.width, rect.height)
+      lastClient = { x: e.clientX, y: e.clientY }
+    })
+
+    const endDrag = (e: PointerEvent): void => {
+      if (!dragging || e.pointerId !== pointerId) return
+      dragging = false
+      pointerId = null
+      brush = null
+      panning = false
+      painted = new Set()
+      try {
+        board.releasePointerCapture(e.pointerId)
+      } catch {
+        /* ignore */
+      }
     }
-    svg.addEventListener('pointerup', endDrag)
-    svg.addEventListener('pointercancel', endDrag)
+    board.addEventListener('pointerup', endDrag)
+    board.addEventListener('pointercancel', endDrag)
   }
 
   /* ———————————————————— 撤销 / 重做 / 清空 ———————————————————— */
@@ -889,4 +913,5 @@ export function createApp(root: HTMLElement, adapter: GameAdapter) {
     adapter,
   }
 }
+
 

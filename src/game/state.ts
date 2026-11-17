@@ -40,8 +40,8 @@ export function cloneState(state: GameState): ThermoState {
 export function cycleValue(state: GameState, target: HitTarget): number {
   const s = asThermoState(state)
   const v = s.cells[target.index] ?? EMPTY
-  if (v === EMPTY) return FILLED
-  if (v === FILLED) return MARK
+  // 左键：空/负面(标记) → 正面(注水)；正面 → 空
+  if (v === EMPTY || v === MARK) return FILLED
   return EMPTY
 }
 
